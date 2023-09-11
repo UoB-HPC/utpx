@@ -76,6 +76,16 @@ std::optional<utpx::HSACOMeta> utpx::parseHSACodeObject(const char *data, size_t
     return {};
   }
 
+  auto kindName = [](HSACOKernelMeta::Arg::Kind kind) {
+    switch (kind) {
+      case HSACOKernelMeta::Arg::Kind::ByValue: return "ByValue";
+      case HSACOKernelMeta::Arg::Kind::GlobalBuffer: return "GlobalBuffer";
+      case HSACOKernelMeta::Arg::Kind::Hidden: return "Hidden";
+      case HSACOKernelMeta::Arg::Kind::Unknown: return "Unknown";
+      default: return "Undefined";
+    }
+  };
+
   auto parseArgKind = [](const std::string &value) -> HSACOKernelMeta::Arg::Kind {
     if (value.rfind("hidden_", 0) == 0) return HSACOKernelMeta::Arg::Kind::Hidden;
     else if (value == "by_value")
@@ -119,8 +129,10 @@ std::optional<utpx::HSACOMeta> utpx::parseHSACodeObject(const char *data, size_t
         log("[HSACO] \t - kernargSize:  %zu", meta[i].kernargSize);
         log("[HSACO] \t - kernargAlign: %zu", meta[i].kernargAlign);
         log("[HSACO] \t - args:" );
-        for (size_t k = 0; k < meta[i].args.size(); ++k)
-          log("[HSACO] \t   - %ld+%ld packed=%d", meta[i].args[k].size, meta[i].args[k].offset, meta[i].packed(k));
+        for (size_t k = 0; k < meta[i].args.size(); ++k) {
+          auto &arg = meta[i].args[k];
+          log("[HSACO] \t   - %ld+%ld packed=%d, kind=%s", arg.size, arg.offset, meta[i].packed(k), kindName(arg.kind));
+        }
       }
       return meta;
     }

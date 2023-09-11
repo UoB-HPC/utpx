@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
+const static char *HsaLibrarySO = "libhsa-runtime64.so";
+
 extern "C" {
 
 typedef enum {

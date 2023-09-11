@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 const static char *HipLibrarySO = "libamdhip64.so";
@@ -82,6 +84,30 @@ typedef hipError_t (*_hipStreamAddCallback)(hipStream_t hStream, hipStreamCallba
 typedef void (*___hipRegisterFunction)(std::vector<hipModule_t> *, const void *, char *, const char *, unsigned int, unsigned *, unsigned *,
                                        dim3 *, dim3 *, int *);
 
+typedef enum hipJitOption {
+  hipJitOptionMaxRegisters = 0,
+  hipJitOptionThreadsPerBlock,
+  hipJitOptionWallTime,
+  hipJitOptionInfoLogBuffer,
+  hipJitOptionInfoLogBufferSizeBytes,
+  hipJitOptionErrorLogBuffer,
+  hipJitOptionErrorLogBufferSizeBytes,
+  hipJitOptionOptimizationLevel,
+  hipJitOptionTargetFromContext,
+  hipJitOptionTarget,
+  hipJitOptionFallbackStrategy,
+  hipJitOptionGenerateDebugInfo,
+  hipJitOptionLogVerbose,
+  hipJitOptionGenerateLineInfo,
+  hipJitOptionCacheMode,
+  hipJitOptionSm3xOpt,
+  hipJitOptionFastCompile,
+  hipJitOptionNumOptions,
+} hipJitOption;
+
+typedef hipError_t (*_hipModuleLoadDataEx)(hipModule_t *module, const void *image, unsigned int numOptions, hipJitOption *options,
+                                           void **optionValues);
+
 typedef hipError_t (*_hipMalloc)(void **, size_t);
 typedef hipError_t (*_hipMallocManaged)(void **, size_t, unsigned int);
 typedef hipError_t (*_hipLaunchKernel)(const void *, dim3, dim3, void **, size_t, hipStream_t);
@@ -107,3 +133,21 @@ typedef hipError_t (*_hipModuleLaunchKernel)(hipFunction_t f, unsigned int gridD
                                              unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ,
                                              unsigned int sharedMemBytes, hipStream_t hStream, void **kernelParams, void **extra);
 }
+
+// XXX Uber hack to get the kernel name
+struct amdMonitor {
+  std::atomic_intptr_t contendersList_;
+  char name_[64];
+  std::atomic_intptr_t onDeck_;
+  void *volatile waitersList_;
+  void *volatile owner_;
+  uint32_t lockCount_;
+  const bool recursive_;
+};
+
+// see hip::DeviceFunc, hipFunction_t and DeviceFunc* is the same thing apparently
+struct amdDeviceFunc {
+  amdMonitor dflock_;
+  std::string name_;
+  void *kernel_;
+};

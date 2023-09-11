@@ -7,25 +7,25 @@
 #include "intercept_memory.h"
 #include "utpx.h"
 
-#define LOG
+//#define LOG
 
 namespace utpx {
 
-#ifdef LOG
-
-void vlog(const char *fmt, va_list args1) {
-  std::va_list args2;
-  va_copy(args2, args1);
-  std::vector<char> buf(1 + std::vsnprintf(nullptr, 0, fmt, args1));
-  va_end(args1);
-  std::vsnprintf(buf.data(), buf.size(), fmt, args2);
-  va_end(args2);
-  auto epochMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-  std::fprintf(stderr, "[UTPX][+%ld,t=%d] %s\n", epochMs.count(), gettid(), buf.data());
-}
-#else
-void vlog(const char *fmt, va_list args1) {}
-#endif
+//#ifdef LOG
+//
+//void vlog(const char *fmt, va_list args1) {
+//  std::va_list args2;
+//  va_copy(args2, args1);
+//  std::vector<char> buf(1 + std::vsnprintf(nullptr, 0, fmt, args1));
+//  va_end(args1);
+//  std::vsnprintf(buf.data(), buf.size(), fmt, args2);
+//  va_end(args2);
+//  auto epochMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+//  std::fprintf(stderr, "[UTPX][+%ld,t=%d] %s\n", epochMs.count(), gettid(), buf.data());
+//}
+//#else
+//void vlog(const char *fmt, va_list args1) {}
+//#endif
 
 // void log(const char *fmt, ...) {
 //
@@ -184,7 +184,7 @@ extern "C" [[maybe_unused]] void __attribute__((destructor)) preload_exit() { fa
 typedef void *(*_malloc)(size_t);
 
 extern "C" [[maybe_unused]] hipError_t hipMallocManaged(void **ptr, size_t size, unsigned int flags) {
-  auto original = dlSymbol<_hipMallocManaged>("hipMallocManaged");
+  auto original = dlSymbol<_hipMallocManaged>("hipMallocManaged", HipLibrarySO);
   if (size < fault::hostPageSize()) {
     log("[MEM] Allocation (%zu) less than page size (%zu), skipping", size, fault::hostPageSize());
     return original(ptr, size, flags);
@@ -206,7 +206,7 @@ extern "C" [[maybe_unused]] hipError_t hipMallocManaged(void **ptr, size_t size,
 // thread_local bool __hipstdpar_dealloc_active = false;
 
 extern "C" [[maybe_unused]] hipError_t hipMemcpy(void *dst, const void *src, size_t size, hipMemcpyKind kind) {
-  auto original = dlSymbol<_hipMemcpy>("hipMemcpy");
+  auto original = dlSymbol<_hipMemcpy>("hipMemcpy", HipLibrarySO);
   switch (kind) {
     case hipMemcpyHostToHost: // fallthrough
     case hipMemcpyDeviceToDevice: return original(dst, src, size, kind);
@@ -221,6 +221,7 @@ extern "C" [[maybe_unused]] hipError_t hipMemcpy(void *dst, const void *src, siz
           case hipMemcpyDefault: return "MemcpyDefault";
           case hipMemcpyHostToDevice: return "MemcpyHostToDevice";
           case hipMemcpyDeviceToHost: return "MemcpyDeviceToHost";
+          default: return "Unknown";
         }
       };
 
@@ -257,7 +258,7 @@ extern "C" [[maybe_unused]] hipError_t hipMemcpy(void *dst, const void *src, siz
 }
 
 extern "C" [[maybe_unused]] hipError_t hipMemset(void *ptr, int value, size_t size) {
-  auto original = dlSymbol<_hipMemset>("hipMemset");
+  auto original = dlSymbol<_hipMemset>("hipMemset", HipLibrarySO);
   // XXX ptr may be an offset from base we need to do a ranged search
   if (auto it = findHostAllocations(reinterpret_cast<uintptr_t>(ptr)); it != hostToMirroredAlloc.end()) {
     log("Intercepting hipMemset(%p, %d, %ld), existing host allocation found", ptr, value, size);
@@ -275,7 +276,7 @@ extern "C" [[maybe_unused]] hipError_t hipMemset(void *ptr, int value, size_t si
 }
 
 extern "C" [[maybe_unused]] hipError_t hipFree(void *ptr) {
-  auto original = dlSymbol<_hipFree>("hipFree");
+  auto original = dlSymbol<_hipFree>("hipFree", HipLibrarySO);
   if (!ptr)
     return original(nullptr); // XXX still delegate to HIP because hipFree(nullptr) can be used as an implicit hipDeviceSynchronize or
                               // initialisation of the HIP runtime
@@ -300,7 +301,7 @@ extern "C" [[maybe_unused]] hipError_t hipPointerGetAttributes(hipPointerAttribu
   log("Replace hipPointerGetAttributes(%p, %p), isManaged=%d", attributes, ptr, attributes->isManaged);
 
   if (auto it = findHostAllocations(reinterpret_cast<uintptr_t>(ptr)); it != hostToMirroredAlloc.end()) {
-    log(" -> Replace hipPointerGetAttributes(%p, 0x%lx), isManaged=%d", attributes, hostPtr, attributes->isManaged);
+    log(" -> Replace hipPointerGetAttributes(%p, %p), isManaged=%d", attributes, ptr, attributes->isManaged);
     attributes->isManaged = true;
     return hipSuccess;
   }

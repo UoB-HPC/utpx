@@ -21,7 +21,7 @@ extern "C" [[maybe_unused]] hsa_status_t hsa_code_object_reader_create_from_memo
     size_t size,                                                                    //
     hsa_code_object_reader_t *code_object_reader) {
   // Here we have access to our ELF code object, we extract the .note section and record the metadata.
-  auto original = dlSymbol<_hsa_code_object_reader_create_from_memory>("hsa_code_object_reader_create_from_memory");
+  auto original = dlSymbol<_hsa_code_object_reader_create_from_memory>("hsa_code_object_reader_create_from_memory", HsaLibrarySO);
   auto result = original(code_object, size, code_object_reader);
   if (recordKernelMetadata && result == HSA_STATUS_SUCCESS) {
     if (auto coMeta = parseHSACodeObject(reinterpret_cast<const char *>(code_object), size); coMeta) {
@@ -70,17 +70,34 @@ extern "C" [[maybe_unused]] void __hipRegisterFunction( // NOLINT(*-reserved-ide
   }
 }
 
+extern "C" [[maybe_unused]] hipError_t hipModuleLoadDataEx( //
+    hipModule_t *module,                                    //
+    const void *image,                                      //
+    unsigned int numOptions,                                //
+    hipJitOption *options,                                  //
+    void **optionValues) {
+  auto original = dlSymbol<_hipModuleLoadDataEx>("hipModuleLoadDataEx", HipLibrarySO);
+  log("[KERNEL] Intercepting hipModuleLoadDataEx(module=%p, image=%p, numOpts=%d, jitOpts=%p, options%p)", //
+      module, image, numOptions, options, optionValues);
+
+  recordKernelMetadata = true;
+  auto result = original(module, image, numOptions, options, optionValues);
+  recordKernelMetadata = false;
+  return result;
+}
+
 static thread_local bool inhibitInterception = {};
 
 void kernel::suspendInterception() { inhibitInterception = true; }
 void kernel::resumeInterception() { inhibitInterception = false; }
 
-extern "C" [[maybe_unused]] hipError_t hipLaunchKernel(const void *f,         //
-                                                       dim3 grid,             //
-                                                       dim3 block,            //
-                                                       void **args,           //
-                                                       size_t sharedMemBytes, //
-                                                       hipStream_t stream) {
+extern "C" [[maybe_unused]] hipError_t hipLaunchKernel( //
+    const void *f,                                      //
+    dim3 grid,                                          //
+    dim3 block,                                         //
+    void **args,                                        //
+    size_t sharedMemBytes,                              //
+    hipStream_t stream) {
   auto original = dlSymbol<_hipLaunchKernel>("hipLaunchKernel", HipLibrarySO);
   if (!inhibitInterception) {
     log("[KERNEL] Intercepting hipLaunchKernel(f=%p, grid=(%d,%d,%d), block=(%d,%d,%d), args=%p, sharedMemBytes=%ld, stream=%p)", //
@@ -93,41 +110,32 @@ extern "C" [[maybe_unused]] hipError_t hipLaunchKernel(const void *f,         //
       log("[KERNEL] WARNING: Cannot find kernel metadata for fn pointer %p, interception function not invoked", f);
   }
   auto r =  original(f, grid, block, args, sharedMemBytes, stream);
-//  if(r == hipSuccess){
-//    dlSymbol<_hipStreamAddCallback>("hipStreamAddCallback", HipLibrarySO)(stream, [](auto, auto, void*){
-//          kernel::interceptKernelLaunchPost();
-//    }, nullptr, 0);
-//  }
   return r;
 }
 
-
-// extern "C" [[maybe_unused]] hipError_t hipModuleLaunchKernel(
-//     hipFunction_t f,
-//     unsigned int gridDimX,
-//     unsigned int gridDimY,
-//     unsigned int gridDimZ,
-//     unsigned int blockDimX,
-//     unsigned int blockDimY,
-//     unsigned int blockDimZ,
-//     unsigned int sharedMemBytes,
-//     hipStream_t hStream,
-//     void **kernelParams,
-//     void **extra)
-// {
-//     auto original = dlSymbol<_hipModuleLaunchKernel>("hipModuleLaunchKernel");
-//     log("hipModuleLaunchKernel(%p, ..., %p, %d)", (void *)f, kernelParams, sharedMemBytes);
-
-//     // currentkernelEntry = function_address;
-
-//     // auto  result = original(function_address, numBlocks, dimBlocks, args, sharedMemBytes, stream);
-
-//     // for (size_t i = 0; i < 7; i++)
-//     // {
-//     //     void *x = args[i];
-//     //     log("[%ld] = %x", i, *((int *)x));
-//     //     fflush(stderr);
-//     // }
-//     return original(function_address, numBlocks, dimBlocks, args, sharedMemBytes, stream);
-// }
+extern "C" [[maybe_unused]] hipError_t hipModuleLaunchKernel( //
+    hipFunction_t f,                                          //
+    unsigned int gridDimX,                                    //
+    unsigned int gridDimY,                                    //
+    unsigned int gridDimZ,                                    //
+    unsigned int blockDimX,                                   //
+    unsigned int blockDimY,                                   //
+    unsigned int blockDimZ,                                   //
+    unsigned int sharedMemBytes,                              //
+    hipStream_t stream,                                       //
+    void **kernelParams,                                      //
+    void **extra) {
+  auto original = dlSymbol<_hipModuleLaunchKernel>("hipModuleLaunchKernel", HipLibrarySO);
+  log("hipModuleLaunchKernel(%p, ..., kernelParams=%p, sharedMemBytes=%d, stream=%p)", f, kernelParams, sharedMemBytes, stream);
+  if (!inhibitInterception) {
+    auto name = reinterpret_cast<amdDeviceFunc *>(f)->name_;
+    if (auto it = std::find_if(kernelMetadata.begin(), kernelMetadata.end(), [&](auto &m) { return m.name == name; });
+        it != kernelMetadata.end()) {
+      log("\t%s<<<>>>", it->demangledName.c_str());
+      kernel::interceptKernelLaunch(f, *it, kernelParams, dim3{gridDimX, gridDimY, gridDimZ}, dim3{blockDimX, blockDimY, blockDimZ});
+    } else
+      log("[KERNEL] WARNING: Cannot find kernel metadata for fn pointer %p, interception function not invoked", f);
+  }
+  return original(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ, sharedMemBytes, stream, kernelParams, extra);
+}
 } // namespace utpx

@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+    cmake_policy(SET CMP0135 NEW)
+endif ()
+
 include(FetchContent)
 FetchContent_Declare(
         elfio
@@ -35,4 +39,9 @@ target_compile_options(utpx PRIVATE
         "-Wall"
         "-Wno-unused-variable"
         "-ffunction-sections"
+        "-fdata-sections"
+
+        "-Wcast-align"
+        "-Werror=return-type"
+        "-Werror=switch"
 )

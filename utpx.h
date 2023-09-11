@@ -13,12 +13,10 @@ void log(const char *fmt, ...);
 #define log(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__)
 #define fatal(fmt, ...) do  { fprintf(stderr,fmt "\n" __VA_OPT__(,)  __VA_ARGS__); std::abort(); } while(0)
 
-#define log(fmt, ...)
-#define fatal(fmt, ...) std::abort()
+// #define log(fmt, ...)
+// #define fatal(fmt, ...) std::abort()
 
-
-
-template <typename T> T dlSymbol(const char *symbol_name, const char *so = nullptr) {
+template <typename T> T dlSymbol(const char *symbol_name, const char *so) {
   static T fn;
   if (!fn) {
     fn = (T)dlsym(RTLD_NEXT, symbol_name);
