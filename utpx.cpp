@@ -69,7 +69,8 @@ struct MirroredAllocation {
   }
 };
 
-std::unordered_map<uintptr_t, MirroredAllocation> hostToMirroredAlloc;
+static std::unordered_map<uintptr_t, MirroredAllocation> hostToMirroredAlloc;
+static std::shared_mutex allocationLock{};
 
 // see rocvirtual.cpp VirtualGPU::submitKernelInternal
 //                    VirtualGPU::processMemObjects
@@ -101,16 +102,21 @@ static void *findHostAllocationsAndCreateMirrored(uintptr_t maybePointer) {
 }
 
 void kernel::interceptKernelLaunch(const void *fn, const HSACOKernelMeta &meta, void **args, dim3, dim3) {
-
   log("\tAttempting to replace host allocations for %p, argCount=%ld, argSize=%ld", fn, meta.args.size(), meta.kernargSize);
 
+  std::unique_lock<std::shared_mutex> write(allocationLock);
   log("\tCurrent host allocations (%zu): ", hostToMirroredAlloc.size());
   {
     int p = 0;
+    size_t totalHost = 0;
+    size_t totalDevice = 0;
     for (const auto &[hostPtr, alloc] : hostToMirroredAlloc) {
       log("\t\t[%3d] host=(0x%lx+%ld) => device=%p", p, hostPtr, alloc.size, alloc.devicePtr);
       p++;
+      totalHost += alloc.size;
+      totalDevice += alloc.devicePtr ? alloc.size : 0;
     }
+    log("\tTotal host = %ld MB, device = %ld MB", totalHost / 1024 / 1024, totalDevice / 1024 / 1024);
   }
 
   for (size_t i = 0; i < meta.args.size(); i++) {
@@ -148,6 +154,7 @@ void kernel::interceptKernelLaunch(const void *fn, const HSACOKernelMeta &meta, 
 }
 
 void fault::handleUserspaceFault(void *faultAddr, void *allocAddr, size_t allocLength) {
+  std::shared_lock<std::shared_mutex> read(allocationLock);
   if (auto it = hostToMirroredAlloc.find(reinterpret_cast<uintptr_t>(allocAddr)); it != hostToMirroredAlloc.end()) {
     log("[KERNEL] \t\tfound device ptr in fault handler  host=%p, device=%p+%ld, fault is %p (offset=%lu)", //
         allocAddr, it->second.devicePtr, it->second.size, faultAddr,
@@ -181,8 +188,6 @@ extern "C" [[maybe_unused]] void __attribute__((constructor)) preload_main() {
 
 extern "C" [[maybe_unused]] void __attribute__((destructor)) preload_exit() { fault::terminateUserspacePagefaultHandling(); }
 
-typedef void *(*_malloc)(size_t);
-
 extern "C" [[maybe_unused]] hipError_t hipMallocManaged(void **ptr, size_t size, unsigned int flags) {
   auto original = dlSymbol<_hipMallocManaged>("hipMallocManaged", HipLibrarySO);
   if (size < fault::hostPageSize()) {
@@ -195,6 +200,7 @@ extern "C" [[maybe_unused]] hipError_t hipMallocManaged(void **ptr, size_t size,
   if (!*ptr) return hipErrorOutOfMemory;
   log("[MEM] Intercepting hipMallocManaged(%p, %ld, %x)", (void *)ptr, size, flags);
   log("[MEM]  -> %p ", *ptr);
+  std::unique_lock<std::shared_mutex> write(allocationLock);
   hostToMirroredAlloc.emplace(reinterpret_cast<uintptr_t>(*ptr), MirroredAllocation{.devicePtr = nullptr, .size = size});
   return hipSuccess;
 }
@@ -260,6 +266,7 @@ extern "C" [[maybe_unused]] hipError_t hipMemcpy(void *dst, const void *src, siz
 extern "C" [[maybe_unused]] hipError_t hipMemset(void *ptr, int value, size_t size) {
   auto original = dlSymbol<_hipMemset>("hipMemset", HipLibrarySO);
   // XXX ptr may be an offset from base we need to do a ranged search
+  std::shared_lock<std::shared_mutex> read(allocationLock);
   if (auto it = findHostAllocations(reinterpret_cast<uintptr_t>(ptr)); it != hostToMirroredAlloc.end()) {
     log("Intercepting hipMemset(%p, %d, %ld), existing host allocation found", ptr, value, size);
     size_t offsetFromBase = reinterpret_cast<uintptr_t>(ptr) - it->first;
@@ -280,6 +287,7 @@ extern "C" [[maybe_unused]] hipError_t hipFree(void *ptr) {
   if (!ptr)
     return original(nullptr); // XXX still delegate to HIP because hipFree(nullptr) can be used as an implicit hipDeviceSynchronize or
                               // initialisation of the HIP runtime
+  std::unique_lock<std::shared_mutex> write(allocationLock);
   if (auto it = hostToMirroredAlloc.find(reinterpret_cast<uintptr_t>(ptr)); it != hostToMirroredAlloc.end()) {
     log("Intercepting hipFree(%p), existing host allocation found", ptr);
 
@@ -299,11 +307,13 @@ extern "C" [[maybe_unused]] hipError_t hipFree(void *ptr) {
 
 extern "C" [[maybe_unused]] hipError_t hipPointerGetAttributes(hipPointerAttribute_t *attributes, const void *ptr) {
   log("Replace hipPointerGetAttributes(%p, %p), isManaged=%d", attributes, ptr, attributes->isManaged);
-
-  if (auto it = findHostAllocations(reinterpret_cast<uintptr_t>(ptr)); it != hostToMirroredAlloc.end()) {
-    log(" -> Replace hipPointerGetAttributes(%p, %p), isManaged=%d", attributes, ptr, attributes->isManaged);
-    attributes->isManaged = true;
-    return hipSuccess;
+  {
+    std::shared_lock<std::shared_mutex> read(allocationLock);
+    if (auto it = findHostAllocations(reinterpret_cast<uintptr_t>(ptr)); it != hostToMirroredAlloc.end()) {
+      log(" -> Replace hipPointerGetAttributes(%p, %p), isManaged=%d", attributes, ptr, attributes->isManaged);
+      attributes->isManaged = true;
+      return hipSuccess;
+    }
   }
 
   auto result = dlSymbol<_hipPointerGetAttributes>("hipPointerGetAttributes", HipLibrarySO)(attributes, ptr);
