@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cstdarg>
 #include <cstring>
 #include <thread>
 
@@ -359,7 +358,7 @@ extern "C" [[maybe_unused]] hipError_t hipFree(void *ptr) {
   auto original = dlSymbol<_hipFree>("hipFree", HipLibrarySO);
   switch (mode) {
     case Mode::Advise: // fallthrough
-    case Mode::Device: return hipFree(ptr);
+    case Mode::Device: return original(ptr);
     case Mode::Mirror:
       if (!ptr)
         return original(nullptr); // XXX still delegate to HIP because hipFree(nullptr) can be used as an implicit hipDeviceSynchronize or
