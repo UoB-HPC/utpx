@@ -76,7 +76,7 @@ std::optional<utpx::HSACOMeta> utpx::parseHSACodeObject(const char *data, size_t
     return {};
   }
 
-  auto kindName = [](HSACOKernelMeta::Arg::Kind kind) {
+  const auto kindName = [](HSACOKernelMeta::Arg::Kind kind) {
     switch (kind) {
       case HSACOKernelMeta::Arg::Kind::ByValue: return "ByValue";
       case HSACOKernelMeta::Arg::Kind::GlobalBuffer: return "GlobalBuffer";

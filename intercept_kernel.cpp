@@ -35,7 +35,6 @@ extern "C" [[maybe_unused]] hsa_status_t hsa_code_object_reader_create_from_memo
   return result;
 }
 
-
 extern "C" [[maybe_unused]] void __hipRegisterFunction( // NOLINT(*-reserved-identifier)
     std::vector<hipModule_t> *modules,                  //
     const void *hostFunction,                           //
@@ -105,11 +104,11 @@ extern "C" [[maybe_unused]] hipError_t hipLaunchKernel( //
 
     if (auto it = kernelNameToMetadata.find(f); it != kernelNameToMetadata.end()) {
       log("\t%s<<<>>>", it->second.demangledName.c_str());
-      kernel::interceptKernelLaunch(f, it->second, args, grid, block);
+      kernel::interceptKernelLaunch(f, it->second, args, grid, block, stream);
     } else
       log("[KERNEL] WARNING: Cannot find kernel metadata for fn pointer %p, interception function not invoked", f);
   }
-  auto r =  original(f, grid, block, args, sharedMemBytes, stream);
+  auto r = original(f, grid, block, args, sharedMemBytes, stream);
   return r;
 }
 
@@ -132,7 +131,8 @@ extern "C" [[maybe_unused]] hipError_t hipModuleLaunchKernel( //
     if (auto it = std::find_if(kernelMetadata.begin(), kernelMetadata.end(), [&](auto &m) { return m.name == name; });
         it != kernelMetadata.end()) {
       log("\t%s<<<>>>", it->demangledName.c_str());
-      kernel::interceptKernelLaunch(f, *it, kernelParams, dim3{gridDimX, gridDimY, gridDimZ}, dim3{blockDimX, blockDimY, blockDimZ});
+      kernel::interceptKernelLaunch(f, *it, kernelParams, dim3{gridDimX, gridDimY, gridDimZ}, dim3{blockDimX, blockDimY, blockDimZ},
+                                    stream);
     } else
       log("[KERNEL] WARNING: Cannot find kernel metadata for fn pointer %p, interception function not invoked", f);
   }

@@ -25,7 +25,7 @@ Paging is done at the granularity of the allocation itself using a *Mirror-on-Ac
 With MoA, initial allocations are resident on the host, and a separate device-resident allocation is
 made whenever a kernel is launched that has dependency on the allocation.
 A device to host write-back is triggered by a `mprotect` induced pagefault, this happens if the host
-mirror of the device-resident memory is accessed in any way (e.g., through pointer dereference).
+mode of the device-resident memory is accessed in any way (e.g., through pointer dereference).
 
 ### Alternatives
 

@@ -36,11 +36,13 @@ add_library(utpx SHARED
 target_link_libraries(utpx PRIVATE elfio::elfio)
 target_include_directories(utpx PRIVATE ${json_SOURCE_DIR})
 target_compile_options(utpx PRIVATE
+        "-march=native"
         "-Wall"
-        "-Wno-unused-variable"
         "-ffunction-sections"
         "-fdata-sections"
 
+        "-Wno-unused-but-set-variable"
+        "-Wno-unused-variable"
         "-Wcast-align"
         "-Werror=return-type"
         "-Werror=switch"

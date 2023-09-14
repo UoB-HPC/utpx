@@ -1,20 +1,30 @@
 #pragma once
 
+#include <cstdio>
 #include <cstdlib>
-
 #include <dlfcn.h>
 #include <unistd.h>
 
 namespace utpx {
 
 void log(const char *fmt, ...);
-[[noreturn]]  void fatal(const char *fmt, ...);
+[[noreturn]] void fatal(const char *fmt, ...);
 
-#define log(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(,) __VA_ARGS__)
-#define fatal(fmt, ...) do  { fprintf(stderr,fmt "\n" __VA_OPT__(,)  __VA_ARGS__); std::abort(); } while(0)
+#ifndef NDEBUG
 
-// #define log(fmt, ...)
-// #define fatal(fmt, ...) std::abort()
+  #define log(fmt, ...) fprintf(stderr, fmt "\n" __VA_OPT__(, ) __VA_ARGS__)
+  #define fatal(fmt, ...)                                                                                                                  \
+    do {                                                                                                                                   \
+      fprintf(stderr, fmt "\n" __VA_OPT__(, ) __VA_ARGS__);                                                                                \
+      std::abort();                                                                                                                        \
+    } while (0)
+
+#else
+
+  #define log(fmt, ...)
+  #define fatal(fmt, ...) std::abort()
+
+#endif
 
 template <typename T> T dlSymbol(const char *symbol_name, const char *so) {
   static T fn;

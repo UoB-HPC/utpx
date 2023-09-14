@@ -23,6 +23,6 @@ struct KernelMetadata {
 void suspendInterception();
 void resumeInterception();
 
-void interceptKernelLaunch(const void *fn, const HSACOKernelMeta &meta, void **args, dim3 grid, dim3 block);
+void interceptKernelLaunch(const void *fn, const HSACOKernelMeta &meta, void **args, dim3 grid, dim3 block, hipStream_t stream);
 
 } // namespace utpx::kernel

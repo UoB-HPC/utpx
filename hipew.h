@@ -54,6 +54,10 @@ typedef enum hipMemcpyKind {
   hipMemcpyDefault = 4
 } hipMemcpyKind;
 
+typedef struct ihipStream_t *hipStream_t;
+typedef struct ihipModuleSymbol_t *hipFunction_t;
+typedef struct ihipModule_t *hipModule_t;
+
 typedef hipError_t (*_hipMalloc)(void **, size_t);
 typedef hipError_t (*_hipMemset)(void *, int, size_t);
 typedef hipError_t (*_hipMemcpy)(void *, const void *, size_t, hipMemcpyKind);
@@ -63,14 +67,11 @@ typedef hipError_t (*_hipDeviceSynchronize)();
 typedef hipError_t (*_hipPointerGetAttributes)(hipPointerAttribute_t *, const void *);
 typedef hipError_t (*_hipGetDevice)(int *device);
 typedef hipError_t (*_hipMemAdvise)(const void *, size_t, hipMemoryAdvise, int);
+typedef hipError_t (*_hipMemPrefetchAsync)(const void *, size_t, int, hipStream_t);
 
 typedef void *(*___hipstdpar_realloc)(void *, std::size_t);
 typedef void (*___hipstdpar_free)(void *);
 typedef void (*___hipstdpar_operator_delete_aligned_sized)(void *, std::size_t, std::size_t);
-
-typedef struct ihipStream_t *hipStream_t;
-typedef struct ihipModuleSymbol_t *hipFunction_t;
-typedef struct ihipModule_t *hipModule_t;
 
 typedef struct dim3 {
   uint32_t x;
@@ -126,8 +127,7 @@ typedef enum hipFunction_attribute {
 } hipFunction_attribute;
 typedef hipError_t (*_hipFuncGetAttribute)(int *pi, hipFunction_attribute attrib, hipFunction_t hfunc);
 
-typedef hipError_t (*_hipModuleGetFunction)(hipFunction_t* hfunc, hipModule_t hmod, const char* name);
-
+typedef hipError_t (*_hipModuleGetFunction)(hipFunction_t *hfunc, hipModule_t hmod, const char *name);
 
 typedef hipError_t (*_hipModuleLaunchKernel)(hipFunction_t f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ,
                                              unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ,
