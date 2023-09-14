@@ -44,6 +44,10 @@ StdPar models that interpose `malloc`/`free` would see all originally host-alloc
 remote which adds catastrophic latency even if bandwidth isn't a limiting factor, not to mention
 that device allocations are physical and immediate and not virtual.
 
+**UTPX provides support for these two scenarios as a special mode by replacing `hipMallocManaged`
+with `hipMalloc` or by invoking `hipMemPrefetchAsync` on the dependent memory before each kernel
+invocation.**
+
 ### Status
 
 UTPX requires certain HIP memory APIs to be intercepted for the mirrored allocation to work
@@ -61,6 +65,13 @@ and hipSYCL (StdPar or SYCL using Integrated SCMP mode only) work:
 * Any device query, event, or stream API, those do not require special handling.
 
 ### Usage
+
+The environment variable `UTPX_MODE` supports:
+
+* `MIRROR` for MoA, this is the default if `UTPX_MODE` is not set
+* `DEVICE` for always device resident but host-accessible (`hipMalloc`) allocation
+* `ADVISE` for coarse grained `hipMallocManaged` and dynamic `hipMemPrefetchAsync` calls on kernel
+  submission
 
 ```shell
 # On RadeonVII
