@@ -386,8 +386,8 @@ extern "C" [[maybe_unused]] hipError_t hipFree(void *ptr) {
 extern "C" [[maybe_unused]] hipError_t hipPointerGetAttributes(hipPointerAttribute_t *attributes, const void *ptr) {
   auto original = dlSymbol<_hipPointerGetAttributes>("hipPointerGetAttributes", HipLibrarySO);
   switch (mode) {
-    case Mode::Advise: // fallthrough
-    case Mode::Device: return original(attributes, ptr);
+    case Mode::Advise: return original(attributes, ptr);
+    case Mode::Device: // fallthrough
     case Mode::Mirror:
       log("Replace hipPointerGetAttributes(%p, %p), isManaged=%d", attributes, ptr, attributes->isManaged);
       auto result = original(attributes, ptr);
