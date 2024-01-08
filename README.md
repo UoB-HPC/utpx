@@ -110,14 +110,29 @@ Triad       833085.608  0.00097     0.00101     0.00097
 Dot         851026.490  0.00063     0.00065     0.00064 
 ```
 
+## Citing 
+
+This work is part of an evaluation of multiple StdPar implementations on AMD platforms.
+The full report is available at https://arxiv.org/abs/2401.02680, please cite this working using:
+
+```
+@misc{lin2024preliminary,
+      title={Preliminary report: Initial evaluation of StdPar implementations on AMD GPUs for HPC}, 
+      author={Wei-Chen Lin and Simon McIntosh-Smith and Tom Deakin},
+      year={2024},
+      eprint={2401.02680},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC}
+}
+```
+
 ## Building
 
 ### Dependencies
 
 * CMake >= 3.14
 * C++17-capable compiler
-* x86_64 Linux (ROCm is only supported on x86_64: Linux on another architecture and Win32 is not
-  supported)
+* x86_64 Linux (ROCm is only supported on x86_64: Linux on another architecture is not supported)
 * No extra library is required beyond libstdc++; **a ROCm (HIP/HSA) installation is not required**
   and will not be used
 
